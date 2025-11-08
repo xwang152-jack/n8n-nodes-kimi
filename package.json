@@ -1,19 +1,31 @@
 {
-	"name": "n8n-nodes-<...>",
+	"name": "n8n-nodes-kimi",
 	"version": "0.1.0",
-	"description": "",
+	"description": "n8n community plugin for Kimi (Moonshot) Chat Models",
 	"license": "MIT",
-	"homepage": "",
+	"homepage": "https://platform.moonshot.cn/docs/api",
 	"keywords": [
-		"n8n-community-node-package"
+		"n8n-community-node-package",
+		"n8n",
+		"n8n-node",
+		"kimi",
+		"moonshot",
+		"moonshot-ai",
+		"chat-completions",
+		"vision",
+		"multimodal",
+		"llm",
+		"chat-model",
+		"ai",
+		"langchain"
 	],
 	"author": {
-		"name": "",
-		"email": ""
+		"name": "xwang152-jack",
+		"email": "xwang152@163.com"
 	},
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/<...>/n8n-nodes-<...>.git"
+		"url": "https://github.com/xwang152-jack/n8n-nodes-kimi.git"
 	},
 	"scripts": {
 		"build": "n8n-node build",
@@ -31,12 +43,11 @@
 		"n8nNodesApiVersion": 1,
 		"strict": true,
 		"credentials": [
-			"dist/credentials/GithubIssuesApi.credentials.js",
-			"dist/credentials/GithubIssuesOAuth2Api.credentials.js"
+			"dist/credentials/KimiApi.credentials.js"
 		],
 		"nodes": [
-			"dist/nodes/GithubIssues/GithubIssues.node.js",
-			"dist/nodes/Example/Example.node.js"
+			"dist/nodes/KimiChain/KimiChain.node.js",
+			"dist/nodes/Kimi/Kimi.node.js"
 		]
 	},
 	"devDependencies": {
@@ -45,6 +56,11 @@
 		"prettier": "3.6.2",
 		"release-it": "^19.0.4",
 		"typescript": "5.9.2"
+	},
+	"dependencies": {
+		"@langchain/openai": "^0.2.1",
+		"langchain": "^0.2.20",
+		"lodash": "^4.17.21"
 	},
 	"peerDependencies": {
 		"n8n-workflow": "*"
