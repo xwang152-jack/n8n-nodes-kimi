@@ -295,6 +295,27 @@ export class Kimi implements INodeType {
             ],
             default: 'text',
           },
+          {
+            displayName: 'Tool Choice',
+            name: 'tool_choice',
+            type: 'options',
+            options: [
+              { name: 'Auto', value: 'auto' },
+              { name: 'Required', value: 'required' },
+              { name: 'None', value: 'none' },
+            ],
+            default: 'auto',
+            description: 'Control how tools are invoked when tools are provided',
+          },
+          {
+            displayName: 'Tools JSON',
+            name: 'tools_json',
+            type: 'string',
+            typeOptions: { rows: 6 },
+            default: '',
+            description:
+              'JSON array of tool definitions (OpenAI/Kimi format), e.g. [{"type":"function","function":{"name":"web_search","parameters":{...}}}]',
+          },
         ],
       },
     ],
@@ -394,6 +415,9 @@ export class Kimi implements INodeType {
           messages,
         };
 
+        // K2 thinking model detection
+        const isK2Thinking = /k2.*thinking/i.test(model) || /kimi-k2-thinking/i.test(model);
+
         // Options mapping
         if (typeof options.temperature === 'number') payload.temperature = options.temperature;
         if (typeof options.top_p === 'number') payload.top_p = options.top_p;
@@ -402,6 +426,39 @@ export class Kimi implements INodeType {
         if (typeof options.frequency_penalty === 'number') payload.frequency_penalty = options.frequency_penalty;
         if (typeof options.response_format === 'string' && options.response_format !== 'text') {
           payload.response_format = { type: options.response_format };
+        } else if (isK2Thinking) {
+          // For best tool-calling performance and stable structured outputs
+          payload.response_format = { type: 'json_object' };
+        }
+
+        // Tools support
+        if (typeof options.tools_json === 'string' && options.tools_json.trim()) {
+          try {
+            const tools = JSON.parse(options.tools_json);
+            if (!Array.isArray(tools)) {
+              throw new Error('tools_json must be an array');
+            }
+            payload.tools = tools;
+          } catch (err) {
+            throw new NodeOperationError(
+              this.getNode(),
+              `Invalid tools JSON: ${(err as Error).message}`,
+              { itemIndex: i },
+            );
+          }
+        }
+        if (typeof options.tool_choice === 'string' && options.tool_choice !== 'none') {
+          payload.tool_choice = options.tool_choice;
+        }
+
+        // K2 thinking recommended defaults
+        if (isK2Thinking) {
+          if (!(typeof options.max_tokens === 'number' && options.max_tokens > 0)) {
+            payload.max_tokens = 16000;
+          }
+          if (typeof options.temperature !== 'number') {
+            payload.temperature = 1.0;
+          }
         }
 
         const response = await this.helpers.requestWithAuthentication.call(this, 'kimiApi', {
@@ -413,6 +470,7 @@ export class Kimi implements INodeType {
         });
 
         const content = response?.choices?.[0]?.message?.content ?? null;
+        const reasoning = response?.choices?.[0]?.message?.reasoning_content ?? null;
         const executionData = this.helpers.constructExecutionMetaData(
           this.helpers.returnJsonArray({
             model,
@@ -420,6 +478,7 @@ export class Kimi implements INodeType {
             id: response?.id,
             created: response?.created,
             content,
+            reasoning,
             raw: response,
           }),
           { itemData: { item: i } },

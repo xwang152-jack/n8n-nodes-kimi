@@ -211,6 +211,9 @@ export class KimiChain implements INodeType {
             },
         };
 
+        // Detect K2 Thinking model
+        const isK2Thinking = /k2.*thinking/i.test(modelName) || /kimi-k2-thinking/i.test(modelName);
+
         // Add optional parameters if they are set
         if (options.frequencyPenalty !== undefined) {
             config.frequencyPenalty = options.frequencyPenalty;
@@ -220,15 +223,23 @@ export class KimiChain implements INodeType {
         }
         if (options.maxTokens !== undefined && options.maxTokens !== -1) {
             config.maxTokens = options.maxTokens;
+        } else if (isK2Thinking) {
+            // Recommended default for K2 thinking
+            config.maxTokens = 16000;
         }
         if (options.presencePenalty !== undefined) {
             config.presencePenalty = options.presencePenalty;
         }
-        if (options.responseFormat !== undefined) {
+        if (options.responseFormat !== undefined && options.responseFormat !== 'text') {
             config.responseFormat = { type: options.responseFormat };
+        } else if (isK2Thinking) {
+            // Favor structured outputs with K2 thinking model
+            config.responseFormat = { type: 'json_object' };
         }
         if (options.temperature !== undefined) {
             config.temperature = options.temperature;
+        } else if (isK2Thinking) {
+            config.temperature = 1.0;
         }
         if (options.timeout !== undefined) {
             config.timeout = options.timeout;
