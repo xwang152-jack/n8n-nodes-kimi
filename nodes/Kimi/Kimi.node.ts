@@ -11,7 +11,7 @@ export class Kimi implements INodeType {
   description: INodeTypeDescription = {
     displayName: 'Kimi',
     name: 'kimi',
-    icon: 'file:kimi.svg',
+    icon: 'file:kimi.png',
     group: ['transform'],
     version: 1,
     subtitle: '={{$parameter["operation"]}}',

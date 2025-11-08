@@ -14,7 +14,7 @@ export class KimiChain implements INodeType {
     description: INodeTypeDescription = {
         displayName: 'Kimi Chat Model',
         name: 'kimiChain',
-        icon: 'file:kimi.svg',
+        icon: 'file:kimi.png',
         group: ['transform'],
         version: 1,
         description: 'Kimi Chat Model for advanced usage with an AI chain',
