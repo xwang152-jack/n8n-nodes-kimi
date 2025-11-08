@@ -2,6 +2,26 @@
 
 所有重要变更都会记录在此文件中。
 
+## v0.1.4 — 2025-11-08
+
+### 新增
+- `KimiChain` 节点：新增 `Streaming Output` 选项；当模型为 `kimi-k2-thinking` 时默认启用 `streaming = true`，以便流式输出包含 `reasoning_content` 与 `content`。
+
+### 改进
+- `Kimi` 节点（REST）：新增 `Tools JSON` 与 `Tool Choice` 选项，支持 Moonshot/OpenAI 兼容的函数工具定义与调用；自动应用 K2 推荐默认值（未显式设置时）：`max_tokens = 16000`、`temperature = 1.0`、`response_format = json_object`。
+- 输出：在 `Kimi` 节点返回中增加 `reasoning` 字段，透出 `reasoning_content`，便于观察多步推理与工具调用链路。
+
+### 维护
+- `KimiChain` 节点：在未显式设置时应用 K2 推荐默认值（`maxTokens = 16000`、`temperature = 1.0`、`responseFormat = json_object`）。
+
+## v0.1.3 — 2025-11-08
+
+### 改进
+- 图标更新：将节点图标统一为 PNG，并确保 `dist/nodes/Kimi/` 与 `dist/nodes/KimiChain/` 目录包含 `kimi.png`，修复在 n8n 中的显示一致性。
+
+### 维护
+- 构建并验证通过，发布至 npm。
+
 
 ## v0.1.2 — 2025-11-08
 
