@@ -93,6 +93,14 @@ export class KimiChain implements INodeType {
                         type: 'string',
                     },
                     {
+                        displayName: 'Streaming Output',
+                        name: 'streaming',
+                        default: false,
+                        description:
+                            'Enable streaming outputs. Recommended for kimi-k2-thinking to stream reasoning_content and content.',
+                        type: 'boolean',
+                    },
+                    {
                         displayName: 'Frequency Penalty',
                         name: 'frequencyPenalty',
                         default: 0,
@@ -193,6 +201,7 @@ export class KimiChain implements INodeType {
 
         const options = this.getNodeParameter('options', itemIndex, {}) as {
             baseURL?: string;
+            streaming?: boolean;
             frequencyPenalty?: number;
             maxRetries?: number;
             maxTokens?: number;
@@ -240,6 +249,13 @@ export class KimiChain implements INodeType {
             config.temperature = options.temperature;
         } else if (isK2Thinking) {
             config.temperature = 1.0;
+        }
+
+        // Streaming configuration
+        if (options.streaming !== undefined) {
+            config.streaming = options.streaming;
+        } else if (isK2Thinking) {
+            config.streaming = true;
         }
         if (options.timeout !== undefined) {
             config.timeout = options.timeout;
