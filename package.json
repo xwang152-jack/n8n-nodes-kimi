@@ -1,6 +1,6 @@
 {
 	"name": "n8n-nodes-kimi",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "n8n community plugin for Kimi (Moonshot) Chat Models",
 	"license": "MIT",
 	"homepage": "https://platform.moonshot.cn/docs/api",

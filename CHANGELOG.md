@@ -2,6 +2,20 @@
 
 所有重要变更都会记录在此文件中。
 
+## v0.1.1 — 2025-11-08
+
+### 修复
+- 修复图标显示：将 `Kimi` 节点的 `icon` 简化为 `file:kimi.svg`，并确保 `icons/` 目录包含在发布包内（`package.json#files`）。
+- 解决安装到 n8n 后 SVG 不显示的问题（路径与打包一致）。
+
+### 改进
+- 模型下拉搜索：`Kimi` 节点改用 `listSearch.searchModels`，支持本地过滤与排序，交互更顺滑。
+- HTTP 请求：`loadModels` 改用 `httpRequestWithAuthentication`，替代过时的请求方式。
+- 回退模型列表更丰富，并统一模型别名（如 `moonshot-v1`）。
+
+### 维护
+- 构建验证通过：`npm run build` 成功，`dist/icons/` 包含 SVG 图标。
+
 ## v0.1.0 — 2025-11-08
 
 ### 新增
