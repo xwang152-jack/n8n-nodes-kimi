@@ -216,6 +216,9 @@ export class KimiChain implements INodeType {
             apiKey: credentials.apiKey as string,
             model: modelName,
             baseURL: options.baseURL || 'https://api.moonshot.cn/v1',
+            configuration: {
+                baseURL: options.baseURL || 'https://api.moonshot.cn/v1',
+            },
         };
 
         // Detect K2 Thinking model
