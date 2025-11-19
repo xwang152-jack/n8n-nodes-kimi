@@ -17,7 +17,7 @@ export async function searchModels(
   ];
 
   try {
-    const response = await this.helpers.httpRequestWithAuthentication.call(this, 'kimiApi', {
+    const response = await this.helpers.requestWithAuthentication.call(this, 'kimiApi', {
       baseURL,
       url: '/models',
       method: 'GET',

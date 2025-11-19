@@ -16,6 +16,19 @@ export class Kimi implements INodeType {
     version: 1,
     subtitle: '={{$parameter["operation"]}}',
     description: 'Use Kimi (Moonshot) traditional REST API',
+    codex: {
+      categories: ['AI'],
+      subcategories: {
+        AI: ['Language Models', 'Chat Models'],
+      },
+      resources: {
+        primaryDocumentation: [
+          {
+            url: 'https://platform.moonshot.cn/docs/api',
+          },
+        ],
+      },
+    },
     defaults: {
       name: 'Kimi',
     },
@@ -316,6 +329,12 @@ export class Kimi implements INodeType {
             description:
               'JSON array of tool definitions (OpenAI/Kimi format), e.g. [{"type":"function","function":{"name":"web_search","parameters":{...}}}]',
           },
+          {
+            displayName: 'Timeout',
+            name: 'timeout',
+            type: 'number',
+            default: 60000,
+          },
         ],
       },
     ],
@@ -374,7 +393,7 @@ export class Kimi implements INodeType {
 
           if (imageSource === 'url') {
             const imageUrl = this.getNodeParameter('imageUrl', i) as string;
-            imageContent.image_url = imageUrl;
+            imageContent.image_url = { url: imageUrl } as any;
           } else if (imageSource === 'binary') {
             const binaryProperty = this.getNodeParameter('binaryProperty', i) as string;
             const encodingMode = this.getNodeParameter('encodingMode', i) as string;
@@ -391,7 +410,7 @@ export class Kimi implements INodeType {
               const mimeTypeParam = this.getNodeParameter('mimeType', i) as string;
               const mimeType = binaryData.mimeType || mimeTypeParam || 'image/png';
               const dataUrl = `data:${mimeType};base64,${base64Data}`;
-              imageContent.image_url = dataUrl;
+              imageContent.image_url = { url: dataUrl } as any;
             }
           } else {
             throw new NodeOperationError(this.getNode(), `Unknown image source: ${imageSource}`, { itemIndex: i });
@@ -467,6 +486,7 @@ export class Kimi implements INodeType {
           method: 'POST',
           body: payload,
           json: true,
+          timeout: (options.timeout as number) ?? 60000,
         });
 
         const content = response?.choices?.[0]?.message?.content ?? null;
@@ -487,10 +507,13 @@ export class Kimi implements INodeType {
         returnData.push(...executionData);
       } catch (error) {
         if (this.continueOnFail()) {
-          returnData.push({ json: { error: (error as Error).message }, pairedItem: { item: i } });
+          const err: any = error as any;
+          returnData.push({ json: { error: (err?.message ?? String(error)), statusCode: err?.statusCode, type: err?.error?.type }, pairedItem: { item: i } });
           continue;
         }
-        throw error;
+        const err: any = error as any;
+        const msg = err?.error?.message || err?.message || 'Request failed';
+        throw new NodeOperationError(this.getNode(), `${msg}`, { itemIndex: i });
       }
     }
 

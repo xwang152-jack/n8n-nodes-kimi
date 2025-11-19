@@ -1,5 +1,4 @@
 import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
-import type { SerializedFields } from '@langchain/core/dist/load/map_keys';
 import { getModelNameForTiktoken } from '@langchain/core/language_models/base';
 import type {
     Serialized,
@@ -20,7 +19,7 @@ type TokensUsageParser = (result: LLMResult) => {
 type RunDetail = {
     index: number;
     messages: BaseMessage[] | string[] | string;
-    options: SerializedSecret | SerializedNotImplemented | SerializedFields;
+    options: SerializedSecret | SerializedNotImplemented | Record<string, any>;
 };
 
 const TIKTOKEN_ESTIMATE_MODEL = 'gpt-4o';
