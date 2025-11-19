@@ -1,6 +1,6 @@
 {
 	"name": "n8n-nodes-kimi",
-  "version": "0.1.4",
+	"version": "0.1.5",
 	"description": "n8n community plugin for Kimi (Moonshot) Chat Models",
 	"license": "MIT",
 	"homepage": "https://platform.moonshot.cn/docs/api",
@@ -57,10 +57,10 @@
 		"release-it": "^19.0.4",
 		"typescript": "5.9.2"
 	},
-  "dependencies": {
-    "@langchain/openai": "^0.2.1",
-    "langchain": "^0.2.20"
-  },
+	"dependencies": {
+		"@langchain/openai": "^0.2.1",
+		"langchain": "^0.2.20"
+	},
 	"peerDependencies": {
 		"n8n-workflow": "*"
 	}
