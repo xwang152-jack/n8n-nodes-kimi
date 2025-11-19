@@ -1,7 +1,21 @@
-import type { ILoadOptionsFunctions } from 'n8n-workflow';
+import type { ILoadOptionsFunctions, INodeListSearchResult } from 'n8n-workflow';
 
-export async function searchModels(this: ILoadOptionsFunctions) {
+type KimiModel = { id: string; name?: string };
+
+export async function searchModels(
+  this: ILoadOptionsFunctions,
+  filter?: string,
+): Promise<INodeListSearchResult> {
   const baseURL = 'https://api.moonshot.cn/v1';
+
+  const fallbackModels: KimiModel[] = [
+    { id: 'moonshot-v1-8k', name: 'moonshot-v1-8k' },
+    { id: 'moonshot-v1-32k', name: 'moonshot-v1-32k' },
+    { id: 'moonshot-v1-128k', name: 'moonshot-v1-128k' },
+    { id: 'moonshot-v1-vision', name: 'moonshot-v1-vision' },
+    { id: 'moonshot-v1', name: 'moonshot-v1 (alias)' },
+  ];
+
   try {
     const response = await this.helpers.requestWithAuthentication.call(this, 'kimiApi', {
       baseURL,
@@ -10,15 +24,38 @@ export async function searchModels(this: ILoadOptionsFunctions) {
       json: true,
     });
 
-    const models = Array.isArray(response?.data) ? response.data : response?.data?.data;
-    if (!Array.isArray(models)) return [];
+    const data = Array.isArray((response as any)?.data) ? (response as any).data : [];
+    const models: KimiModel[] = data.map((m: any) => ({ id: m.id, name: m.id }));
 
-    return models.map((m: any) => ({ name: `${m.id}`, value: m.id }));
-  } catch (e) {
-    return [
-      { name: 'moonshot-v1-8k', value: 'moonshot-v1-8k' },
-      { name: 'moonshot-v1-32k', value: 'moonshot-v1-32k' },
-      { name: 'moonshot-v1-128k', value: 'moonshot-v1-128k' },
-    ];
+    const filtered = models.filter((model) => {
+      if (!filter) return true;
+      return (
+        model.id.toLowerCase().includes(filter.toLowerCase()) ||
+        (model.name ?? '').toLowerCase().includes(filter.toLowerCase())
+      );
+    });
+
+    filtered.sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id));
+
+    return {
+      results: filtered.map((model) => ({
+        name: model.name ?? model.id,
+        value: model.id,
+      })),
+    };
+  } catch (error) {
+    const filtered = fallbackModels.filter((model) => {
+      if (!filter) return true;
+      return (
+        model.id.toLowerCase().includes(filter.toLowerCase()) ||
+        (model.name ?? '').toLowerCase().includes(filter.toLowerCase())
+      );
+    });
+
+    filtered.sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id));
+
+    return {
+      results: filtered.map((model) => ({ name: model.name ?? model.id, value: model.id })),
+    };
   }
 }

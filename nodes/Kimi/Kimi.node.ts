@@ -11,11 +11,24 @@ export class Kimi implements INodeType {
   description: INodeTypeDescription = {
     displayName: 'Kimi',
     name: 'kimi',
-    icon: { light: 'file:kimi.svg', dark: 'file:kimi.dark.svg' },
+    icon: 'file:kimi.png',
     group: ['transform'],
     version: 1,
     subtitle: '={{$parameter["operation"]}}',
     description: 'Use Kimi (Moonshot) traditional REST API',
+    codex: {
+      categories: ['AI'],
+      subcategories: {
+        AI: ['Language Models', 'Chat Models'],
+      },
+      resources: {
+        primaryDocumentation: [
+          {
+            url: 'https://platform.moonshot.cn/docs/api',
+          },
+        ],
+      },
+    },
     defaults: {
       name: 'Kimi',
     },
@@ -295,34 +308,43 @@ export class Kimi implements INodeType {
             ],
             default: 'text',
           },
+          {
+            displayName: 'Tool Choice',
+            name: 'tool_choice',
+            type: 'options',
+            options: [
+              { name: 'Auto', value: 'auto' },
+              { name: 'Required', value: 'required' },
+              { name: 'None', value: 'none' },
+            ],
+            default: 'auto',
+            description: 'Control how tools are invoked when tools are provided',
+          },
+          {
+            displayName: 'Tools JSON',
+            name: 'tools_json',
+            type: 'string',
+            typeOptions: { rows: 6 },
+            default: '',
+            description:
+              'JSON array of tool definitions (OpenAI/Kimi format), e.g. [{"type":"function","function":{"name":"web_search","parameters":{...}}}]',
+          },
+          {
+            displayName: 'Timeout',
+            name: 'timeout',
+            type: 'number',
+            default: 60000,
+          },
         ],
       },
     ],
   };
 
   methods = {
-    loadOptions: {
-      async searchModels(this: ILoadOptionsFunctions) {
-        const baseURL = 'https://api.moonshot.cn/v1';
-        try {
-          const response = await this.helpers.requestWithAuthentication.call(this, 'kimiApi', {
-            baseURL,
-            url: '/models',
-            method: 'GET',
-            json: true,
-          });
-
-          const models = Array.isArray(response?.data) ? response.data : response?.data?.data;
-          if (!Array.isArray(models)) return [];
-
-          return models.map((m: any) => ({ name: `${m.id}`, value: m.id }));
-        } catch (e) {
-          return [
-            { name: 'moonshot-v1-8k', value: 'moonshot-v1-8k' },
-            { name: 'moonshot-v1-32k', value: 'moonshot-v1-32k' },
-            { name: 'moonshot-v1-128k', value: 'moonshot-v1-128k' },
-          ];
-        }
+    listSearch: {
+      async searchModels(this: ILoadOptionsFunctions, filter?: string) {
+        const { searchModels } = await import('./methods/loadModels');
+        return searchModels.call(this, filter);
       },
     },
   };
@@ -371,7 +393,7 @@ export class Kimi implements INodeType {
 
           if (imageSource === 'url') {
             const imageUrl = this.getNodeParameter('imageUrl', i) as string;
-            imageContent.image_url = imageUrl;
+            imageContent.image_url = { url: imageUrl } as any;
           } else if (imageSource === 'binary') {
             const binaryProperty = this.getNodeParameter('binaryProperty', i) as string;
             const encodingMode = this.getNodeParameter('encodingMode', i) as string;
@@ -388,7 +410,7 @@ export class Kimi implements INodeType {
               const mimeTypeParam = this.getNodeParameter('mimeType', i) as string;
               const mimeType = binaryData.mimeType || mimeTypeParam || 'image/png';
               const dataUrl = `data:${mimeType};base64,${base64Data}`;
-              imageContent.image_url = dataUrl;
+              imageContent.image_url = { url: dataUrl } as any;
             }
           } else {
             throw new NodeOperationError(this.getNode(), `Unknown image source: ${imageSource}`, { itemIndex: i });
@@ -412,6 +434,9 @@ export class Kimi implements INodeType {
           messages,
         };
 
+        // K2 thinking model detection
+        const isK2Thinking = /k2.*thinking/i.test(model) || /kimi-k2-thinking/i.test(model);
+
         // Options mapping
         if (typeof options.temperature === 'number') payload.temperature = options.temperature;
         if (typeof options.top_p === 'number') payload.top_p = options.top_p;
@@ -420,6 +445,39 @@ export class Kimi implements INodeType {
         if (typeof options.frequency_penalty === 'number') payload.frequency_penalty = options.frequency_penalty;
         if (typeof options.response_format === 'string' && options.response_format !== 'text') {
           payload.response_format = { type: options.response_format };
+        } else if (isK2Thinking) {
+          // For best tool-calling performance and stable structured outputs
+          payload.response_format = { type: 'json_object' };
+        }
+
+        // Tools support
+        if (typeof options.tools_json === 'string' && options.tools_json.trim()) {
+          try {
+            const tools = JSON.parse(options.tools_json);
+            if (!Array.isArray(tools)) {
+              throw new Error('tools_json must be an array');
+            }
+            payload.tools = tools;
+          } catch (err) {
+            throw new NodeOperationError(
+              this.getNode(),
+              `Invalid tools JSON: ${(err as Error).message}`,
+              { itemIndex: i },
+            );
+          }
+        }
+        if (typeof options.tool_choice === 'string' && options.tool_choice !== 'none') {
+          payload.tool_choice = options.tool_choice;
+        }
+
+        // K2 thinking recommended defaults
+        if (isK2Thinking) {
+          if (!(typeof options.max_tokens === 'number' && options.max_tokens > 0)) {
+            payload.max_tokens = 16000;
+          }
+          if (typeof options.temperature !== 'number') {
+            payload.temperature = 1.0;
+          }
         }
 
         const response = await this.helpers.requestWithAuthentication.call(this, 'kimiApi', {
@@ -428,9 +486,11 @@ export class Kimi implements INodeType {
           method: 'POST',
           body: payload,
           json: true,
+          timeout: (options.timeout as number) ?? 60000,
         });
 
         const content = response?.choices?.[0]?.message?.content ?? null;
+        const reasoning = response?.choices?.[0]?.message?.reasoning_content ?? null;
         const executionData = this.helpers.constructExecutionMetaData(
           this.helpers.returnJsonArray({
             model,
@@ -438,6 +498,7 @@ export class Kimi implements INodeType {
             id: response?.id,
             created: response?.created,
             content,
+            reasoning,
             raw: response,
           }),
           { itemData: { item: i } },
@@ -446,10 +507,13 @@ export class Kimi implements INodeType {
         returnData.push(...executionData);
       } catch (error) {
         if (this.continueOnFail()) {
-          returnData.push({ json: { error: (error as Error).message }, pairedItem: { item: i } });
+          const err: any = error as any;
+          returnData.push({ json: { error: (err?.message ?? String(error)), statusCode: err?.statusCode, type: err?.error?.type }, pairedItem: { item: i } });
           continue;
         }
-        throw error;
+        const err: any = error as any;
+        const msg = err?.error?.message || err?.message || 'Request failed';
+        throw new NodeOperationError(this.getNode(), `${msg}`, { itemIndex: i });
       }
     }
 

@@ -14,7 +14,7 @@ export class KimiChain implements INodeType {
     description: INodeTypeDescription = {
         displayName: 'Kimi Chat Model',
         name: 'kimiChain',
-        icon: 'file:kimi.svg',
+        icon: 'file:kimi.png',
         group: ['transform'],
         version: 1,
         description: 'Kimi Chat Model for advanced usage with an AI chain',
@@ -91,6 +91,14 @@ export class KimiChain implements INodeType {
                         default: 'https://api.moonshot.cn/v1',
                         description: 'Override the default base URL for the API',
                         type: 'string',
+                    },
+                    {
+                        displayName: 'Streaming Output',
+                        name: 'streaming',
+                        default: false,
+                        description:
+                            'Enable streaming outputs. Recommended for kimi-k2-thinking to stream reasoning_content and content.',
+                        type: 'boolean',
                     },
                     {
                         displayName: 'Frequency Penalty',
@@ -193,6 +201,7 @@ export class KimiChain implements INodeType {
 
         const options = this.getNodeParameter('options', itemIndex, {}) as {
             baseURL?: string;
+            streaming?: boolean;
             frequencyPenalty?: number;
             maxRetries?: number;
             maxTokens?: number;
@@ -206,10 +215,11 @@ export class KimiChain implements INodeType {
         const config: any = {
             apiKey: credentials.apiKey as string,
             model: modelName,
-            configuration: {
-                baseURL: options.baseURL || 'https://api.moonshot.cn/v1',
-            },
+            baseURL: options.baseURL || 'https://api.moonshot.cn/v1',
         };
+
+        // Detect K2 Thinking model
+        const isK2Thinking = /k2.*thinking/i.test(modelName) || /kimi-k2-thinking/i.test(modelName);
 
         // Add optional parameters if they are set
         if (options.frequencyPenalty !== undefined) {
@@ -220,15 +230,30 @@ export class KimiChain implements INodeType {
         }
         if (options.maxTokens !== undefined && options.maxTokens !== -1) {
             config.maxTokens = options.maxTokens;
+        } else if (isK2Thinking) {
+            // Recommended default for K2 thinking
+            config.maxTokens = 16000;
         }
         if (options.presencePenalty !== undefined) {
             config.presencePenalty = options.presencePenalty;
         }
-        if (options.responseFormat !== undefined) {
+        if (options.responseFormat !== undefined && options.responseFormat !== 'text') {
             config.responseFormat = { type: options.responseFormat };
+        } else if (isK2Thinking) {
+            // Favor structured outputs with K2 thinking model
+            config.responseFormat = { type: 'json_object' };
         }
         if (options.temperature !== undefined) {
             config.temperature = options.temperature;
+        } else if (isK2Thinking) {
+            config.temperature = 1.0;
+        }
+
+        // Streaming configuration
+        if (options.streaming !== undefined) {
+            config.streaming = options.streaming;
+        } else if (isK2Thinking) {
+            config.streaming = true;
         }
         if (options.timeout !== undefined) {
             config.timeout = options.timeout;
