@@ -2,6 +2,22 @@
 
 所有重要变更都会记录在此文件中。
 
+## v0.1.7 — 2026-02-15
+
+### 新增
+- 支持 Kimi K2.5 系列模型（`kimi-k2.5`、`kimi-k2.5-thinking`），自动检测 Thinking 模型并应用推荐默认值。
+- 凭据新增 `Base URL` 字段，支持自定义 API 端点（代理、专属部署等）。
+- Fallback 模型列表新增 `kimi-k2-turbo-preview`、`kimi-k2-thinking-turbo` 等模型。
+
+### 改进
+- 代码结构优化：将重复的 `loadModels.ts` 提取为 `nodes/shared/loadModels.ts` 共享模块。
+- 替换已弃用的 `requestWithAuthentication` 为 `httpRequestWithAuthentication`。
+- 清理 `N8nLlmTracing.ts` 中未使用的导入和常量，`estimateTokensFromStringList` 改为同步函数。
+
+### 维护
+- 完善 `.gitignore`（添加 `.DS_Store`、`*.tsbuildinfo`）。
+- 构建验证通过。
+
 ## v0.1.4 — 2025-11-08
 
 ### 新增

@@ -1,5 +1,4 @@
 import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
-import { getModelNameForTiktoken } from '@langchain/core/language_models/base';
 import type {
     Serialized,
     SerializedNotImplemented,
@@ -22,9 +21,7 @@ type RunDetail = {
     options: SerializedSecret | SerializedNotImplemented | Record<string, any>;
 };
 
-const TIKTOKEN_ESTIMATE_MODEL = 'gpt-4o';
-
-async function estimateTokensFromStringList(list: string[], model?: string): Promise<number> {
+function estimateTokensFromStringList(list: string[]): number {
     const totalChars = list.join('').length;
     return Math.ceil(totalChars / 4);
 }
@@ -72,14 +69,9 @@ export class N8nLlmTracing extends BaseCallbackHandler {
         this.options = { ...this.options, ...options };
     }
 
-    async estimateTokensFromGeneration(generations: LLMResult['generations']) {
+    estimateTokensFromGeneration(generations: LLMResult['generations']): number {
         const messages = generations.flatMap((gen) => gen.map((g) => g.text));
-        return await this.estimateTokensFromStringList(messages);
-    }
-
-    async estimateTokensFromStringList(list: string[]) {
-        const embeddingModel = getModelNameForTiktoken(TIKTOKEN_ESTIMATE_MODEL);
-        return await estimateTokensFromStringList(list, embeddingModel);
+        return estimateTokensFromStringList(messages);
     }
 
     async handleLLMEnd(output: LLMResult, runId: string) {
@@ -97,7 +89,7 @@ export class N8nLlmTracing extends BaseCallbackHandler {
         const tokenUsage = this.options.tokensUsageParser(output);
 
         if (output.generations.length > 0) {
-            tokenUsageEstimate.completionTokens = await this.estimateTokensFromGeneration(
+            tokenUsageEstimate.completionTokens = this.estimateTokensFromGeneration(
                 output.generations,
             );
 
@@ -123,10 +115,10 @@ export class N8nLlmTracing extends BaseCallbackHandler {
             typeof runDetails.messages === 'string'
                 ? runDetails.messages
                 : runDetails.messages.map((message) => {
-                        if (typeof message === 'string') return message;
-                        if (typeof (message as any)?.toJSON === 'function') return (message as any).toJSON();
-                        return message as any;
-                    });
+                    if (typeof message === 'string') return message;
+                    if (typeof (message as any)?.toJSON === 'function') return (message as any).toJSON();
+                    return message as any;
+                });
 
         const sourceNodeRunIndex =
             this.#parentRunIndex !== undefined ? this.#parentRunIndex + runDetails.index : undefined;
@@ -156,7 +148,7 @@ export class N8nLlmTracing extends BaseCallbackHandler {
     }
 
     async handleLLMStart(llm: Serialized, prompts: string[], runId: string) {
-        const estimatedTokens = await this.estimateTokensFromStringList(prompts);
+        const estimatedTokens = estimateTokensFromStringList(prompts);
         const sourceNodeRunIndex =
             this.#parentRunIndex !== undefined
                 ? this.#parentRunIndex + this.executionFunctions.getNextRunIndex()
@@ -199,10 +191,11 @@ export class N8nLlmTracing extends BaseCallbackHandler {
         });
     }
 
-    async handleLLMError(error: IDataObject | Error, runId: string, parentRunId?: string) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    async handleLLMError(error: IDataObject | Error, runId: string, _parentRunId?: string) {
         const runDetails = this.runsMap[runId] ?? { index: Object.keys(this.runsMap).length };
 
-        if (typeof error === 'object' && (error as any)?.hasOwnProperty('headers')) {
+        if (typeof error === 'object' && Object.prototype.hasOwnProperty.call(error, 'headers')) {
             const errorWithHeaders = error as { headers: Record<string, unknown> };
             Object.keys(errorWithHeaders.headers).forEach((key) => {
                 if (!key.startsWith('x-')) {

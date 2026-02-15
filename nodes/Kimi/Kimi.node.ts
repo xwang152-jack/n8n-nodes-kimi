@@ -434,8 +434,8 @@ export class Kimi implements INodeType {
           messages,
         };
 
-        // K2 thinking model detection
-        const isK2Thinking = /k2.*thinking/i.test(model) || /kimi-k2-thinking/i.test(model);
+        // K2/K2.5 thinking model detection
+        const isThinkingModel = /k2[\.\d]*.*thinking/i.test(model);
 
         // Options mapping
         if (typeof options.temperature === 'number') payload.temperature = options.temperature;
@@ -445,7 +445,7 @@ export class Kimi implements INodeType {
         if (typeof options.frequency_penalty === 'number') payload.frequency_penalty = options.frequency_penalty;
         if (typeof options.response_format === 'string' && options.response_format !== 'text') {
           payload.response_format = { type: options.response_format };
-        } else if (isK2Thinking) {
+        } else if (isThinkingModel) {
           // For best tool-calling performance and stable structured outputs
           payload.response_format = { type: 'json_object' };
         }
@@ -471,7 +471,7 @@ export class Kimi implements INodeType {
         }
 
         // K2 thinking recommended defaults
-        if (isK2Thinking) {
+        if (isThinkingModel) {
           if (!(typeof options.max_tokens === 'number' && options.max_tokens > 0)) {
             payload.max_tokens = 16000;
           }
@@ -480,7 +480,7 @@ export class Kimi implements INodeType {
           }
         }
 
-        const response = await this.helpers.requestWithAuthentication.call(this, 'kimiApi', {
+        const response = await this.helpers.httpRequestWithAuthentication.call(this, 'kimiApi', {
           baseURL,
           url: '/chat/completions',
           method: 'POST',

@@ -20,7 +20,15 @@ export class KimiApi implements ICredentialType {
             typeOptions: { password: true },
             required: true,
             default: '',
-            description: 'Kimi (Moonshot) API Key, 形如 sk-***。获取地址：https://platform.moonshot.cn/',
+            description:
+                'Kimi (Moonshot) API Key, 形如 sk-***。获取地址：https://platform.moonshot.cn/',
+        },
+        {
+            displayName: 'Base URL',
+            name: 'baseUrl',
+            type: 'string',
+            default: 'https://api.moonshot.cn/v1',
+            description: 'API 端点地址，如使用代理或专属部署可修改此项',
         },
     ];
 
@@ -36,7 +44,7 @@ export class KimiApi implements ICredentialType {
 
     test: ICredentialTestRequest = {
         request: {
-            baseURL: 'https://api.moonshot.cn/v1',
+            baseURL: '={{$credentials.baseUrl || "https://api.moonshot.cn/v1"}}',
             url: '/models',
             method: 'GET',
             headers: {
