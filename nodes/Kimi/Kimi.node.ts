@@ -563,6 +563,11 @@ export class Kimi implements INodeType {
           payload.top_p = 0.95;
         }
 
+        // Final enforcement: kimi-k2.5 only allows top_p=0.95
+        if (/k2\.5/i.test(model)) {
+          payload.top_p = 0.95;
+        }
+
         // Apply Instant Mode configuration
         if (useInstantMode && isThinkingModel) {
           // Corrected payload for official API

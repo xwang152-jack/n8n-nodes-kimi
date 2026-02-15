@@ -295,7 +295,11 @@ export class KimiChain implements INodeType {
         if (options.topP !== undefined) {
             config.topP = options.topP;
         } else if (isThinkingModel) {
-            // Fix for kimi-k2.5: only 0.95 is allowed for top_p
+            config.topP = 0.95;
+        }
+
+        // Final enforcement for kimi-k2.5
+        if (/k2\.5/i.test(modelName)) {
             config.topP = 0.95;
         }
 
