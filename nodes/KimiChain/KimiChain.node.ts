@@ -10,6 +10,25 @@ import { NodeConnectionTypes } from 'n8n-workflow';
 import { ChatOpenAI } from '@langchain/openai';
 import { N8nLlmTracing } from '../N8nLlmTracing';
 
+interface KimiChainConfig {
+    apiKey: string;
+    modelName: string; // ChatOpenAI uses modelName or model
+    baseURL: string;
+    configuration?: {
+        baseURL: string;
+    };
+    frequencyPenalty?: number;
+    maxRetries?: number;
+    maxTokens?: number;
+    presencePenalty?: number;
+    responseFormat?: Record<string, unknown>; // ChatOpenAI expects specific format, but any is safer for now to avoid conflicts
+    temperature?: number;
+    streaming?: boolean;
+    timeout?: number;
+    topP?: number;
+    modelKwargs?: Record<string, unknown>;
+}
+
 export class KimiChain implements INodeType {
     description: INodeTypeDescription = {
         displayName: 'Kimi Chat Model',
@@ -34,7 +53,7 @@ export class KimiChain implements INodeType {
                 ],
             },
         },
-        // eslint-disable-next-line n8n-nodes-base/node-class-description-inputs-wrong-regular-node
+
         inputs: [],
         outputs: [NodeConnectionTypes.AiLanguageModel],
         outputNames: ['Model'],
@@ -91,14 +110,6 @@ export class KimiChain implements INodeType {
                         default: 'https://api.moonshot.cn/v1',
                         description: 'Override the default base URL for the API',
                         type: 'string',
-                    },
-                    {
-                        displayName: 'Streaming Output',
-                        name: 'streaming',
-                        default: false,
-                        description:
-                            'Enable streaming outputs. Recommended for kimi-k2-thinking to stream reasoning_content and content.',
-                        type: 'boolean',
                     },
                     {
                         displayName: 'Frequency Penalty',
@@ -163,6 +174,14 @@ export class KimiChain implements INodeType {
                         type: 'number',
                     },
                     {
+                        displayName: 'Streaming Output',
+                        name: 'streaming',
+                        default: false,
+                        description:
+                            'Whether to enable streaming outputs. Recommended for kimi-k2-thinking to stream reasoning_content and content.',
+                        type: 'boolean',
+                    },
+                    {
                         displayName: 'Timeout',
                         name: 'timeout',
                         default: 60000,
@@ -178,9 +197,17 @@ export class KimiChain implements INodeType {
                             'Controls diversity via nucleus sampling: 0.5 means half of all likelihood-weighted options are considered. We generally recommend altering this or temperature but not both.',
                         type: 'number',
                     },
+                    {
+                        displayName: 'Use Instant Mode',
+                        name: 'useInstantMode',
+                        type: 'boolean',
+                        default: false,
+                        description: 'Whether to use Instant Mode (disabled thinking). Sets temperature to 0.6.',
+                    },
                 ],
             },
         ],
+        usableAsTool: true,
     };
 
     methods = {
@@ -210,11 +237,12 @@ export class KimiChain implements INodeType {
             temperature?: number;
             timeout?: number;
             topP?: number;
+            useInstantMode?: boolean;
         };
 
-        const config: any = {
+        const config: KimiChainConfig = {
             apiKey: credentials.apiKey as string,
-            model: modelName,
+            modelName,
             baseURL: options.baseURL || 'https://api.moonshot.cn/v1',
             configuration: {
                 baseURL: options.baseURL || 'https://api.moonshot.cn/v1',
@@ -222,7 +250,10 @@ export class KimiChain implements INodeType {
         };
 
         // Detect K2/K2.5 Thinking model
-        const isThinkingModel = /k2[\.\d]*.*thinking/i.test(modelName);
+        const isThinkingModel = /k2[.\d]*.*thinking/i.test(modelName);
+
+
+        const useInstantMode = options.useInstantMode as boolean;
 
         // Add optional parameters if they are set
         if (options.frequencyPenalty !== undefined) {
@@ -249,7 +280,7 @@ export class KimiChain implements INodeType {
         if (options.temperature !== undefined) {
             config.temperature = options.temperature;
         } else if (isThinkingModel) {
-            config.temperature = 1.0;
+            config.temperature = useInstantMode ? 0.6 : 1.0;
         }
 
         // Streaming configuration
@@ -263,7 +294,18 @@ export class KimiChain implements INodeType {
         }
         if (options.topP !== undefined) {
             config.topP = options.topP;
+        } else if (isThinkingModel) {
+            // Fix for kimi-k2.5: only 0.95 is allowed for top_p
+            config.topP = 0.95;
         }
+
+        if (useInstantMode && isThinkingModel) {
+            config.modelKwargs = {
+                ...config.modelKwargs,
+                thinking: { type: 'disabled' },
+            };
+        }
+
 
         const model = new ChatOpenAI({
             ...config,

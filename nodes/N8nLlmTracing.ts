@@ -18,7 +18,7 @@ type TokensUsageParser = (result: LLMResult) => {
 type RunDetail = {
     index: number;
     messages: BaseMessage[] | string[] | string;
-    options: SerializedSecret | SerializedNotImplemented | Record<string, any>;
+    options: SerializedSecret | SerializedNotImplemented | Record<string, unknown>;
 };
 
 function estimateTokensFromStringList(list: string[]): number {
@@ -26,8 +26,8 @@ function estimateTokensFromStringList(list: string[]): number {
     return Math.ceil(totalChars / 4);
 }
 
-function logAiEvent(executionFunctions: ISupplyDataFunctions, eventType: string, data: any) {
-    executionFunctions.logger.info(`🤖 AI事件: ${eventType}`, data);
+function logAiEvent(executionFunctions: ISupplyDataFunctions, eventType: string, data: unknown) {
+    executionFunctions.logger.info(`🤖 AI事件: ${eventType}`, data as IDataObject);
 }
 
 export class N8nLlmTracing extends BaseCallbackHandler {
@@ -78,7 +78,7 @@ export class N8nLlmTracing extends BaseCallbackHandler {
         const runDetails = this.runsMap[runId] ?? { index: Object.keys(this.runsMap).length };
 
         output.generations = output.generations.map((gen) =>
-            gen.map((g: any) => ({ text: g.text, generationInfo: g.generationInfo })),
+            gen.map((g) => ({ text: g.text, generationInfo: g.generationInfo })),
         );
 
         const tokenUsageEstimate = {
@@ -116,8 +116,9 @@ export class N8nLlmTracing extends BaseCallbackHandler {
                 ? runDetails.messages
                 : runDetails.messages.map((message) => {
                     if (typeof message === 'string') return message;
-                    if (typeof (message as any)?.toJSON === 'function') return (message as any).toJSON();
-                    return message as any;
+                    const msgObj = message as { toJSON?: () => unknown };
+                    if (typeof msgObj.toJSON === 'function') return msgObj.toJSON();
+                    return message;
                 });
 
         const sourceNodeRunIndex =
@@ -154,7 +155,7 @@ export class N8nLlmTracing extends BaseCallbackHandler {
                 ? this.#parentRunIndex + this.executionFunctions.getNextRunIndex()
                 : undefined;
 
-        const options = llm.type === 'constructor' ? (llm as any).kwargs : llm;
+        const options = (llm.type === 'constructor' ? (llm as Serialized & { kwargs?: Record<string, unknown> }).kwargs : llm) as Record<string, unknown>;
         const { index } = this.executionFunctions.addInputData(
             this.connectionType,
             [
@@ -163,7 +164,7 @@ export class N8nLlmTracing extends BaseCallbackHandler {
                         json: {
                             messages: prompts,
                             estimatedTokens,
-                            options,
+                            options: options as IDataObject,
                         },
                     },
                 ],
@@ -178,7 +179,8 @@ export class N8nLlmTracing extends BaseCallbackHandler {
         };
         this.promptTokensEstimate = estimatedTokens;
 
-        const modelName = (llm as any).id?.[(llm as any).id.length - 1] || 'Kimi LLM';
+        const llmObj = llm as Serialized & { id?: string[] };
+        const modelName = llmObj.id?.[llmObj.id.length - 1] || 'Kimi LLM';
         const promptText = prompts.join('\n');
 
         this.executionFunctions.logger.info(`🚀 Kimi LLM开始处理 - 模型: ${modelName}`, {
@@ -199,7 +201,7 @@ export class N8nLlmTracing extends BaseCallbackHandler {
             const errorWithHeaders = error as { headers: Record<string, unknown> };
             Object.keys(errorWithHeaders.headers).forEach((key) => {
                 if (!key.startsWith('x-')) {
-                    delete (errorWithHeaders.headers as any)[key];
+                    delete errorWithHeaders.headers[key];
                 }
             });
         }
@@ -221,7 +223,7 @@ export class N8nLlmTracing extends BaseCallbackHandler {
 
         this.executionFunctions.logger.error('❌ Kimi LLM发生错误', {
             runId,
-            error: (error as any)?.message ?? String(error),
+            error: (error as Error).message ?? String(error),
             timestamp: new Date().toISOString(),
         });
     }

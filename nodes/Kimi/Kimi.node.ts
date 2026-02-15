@@ -7,6 +7,59 @@ import type {
 } from 'n8n-workflow';
 import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 
+interface ImageContent {
+  type: 'input_image';
+  detail?: string;
+  image_url?: { url: string };
+  image_base64?: string;
+}
+
+interface VideoContent {
+  type: 'video_url';
+  video_url: { url: string };
+}
+
+interface TextContent {
+  type: 'input_text';
+  text: string;
+}
+
+type ContentPart = TextContent | ImageContent | VideoContent;
+
+interface KimiMessage {
+  role: string;
+  content: string | ContentPart[];
+}
+
+interface KimiPayload {
+  model: string;
+  messages: KimiMessage[];
+  temperature?: number;
+  top_p?: number;
+  max_tokens?: number;
+  presence_penalty?: number;
+  frequency_penalty?: number;
+  response_format?: { type: string };
+  tools?: Record<string, unknown>[];
+  tool_choice?: string;
+  thinking?: { type: string };
+  chat_template_kwargs?: { thinking: boolean };
+}
+
+interface KimiOptions {
+  baseURL?: string;
+  temperature?: number;
+  top_p?: number;
+  max_tokens?: number;
+  presence_penalty?: number;
+  frequency_penalty?: number;
+  response_format?: string;
+  tools_json?: string;
+  tool_choice?: string;
+  use_instant_mode?: boolean;
+  timeout?: number;
+}
+
 export class Kimi implements INodeType {
   description: INodeTypeDescription = {
     displayName: 'Kimi',
@@ -53,8 +106,8 @@ export class Kimi implements INodeType {
         type: 'options',
         noDataExpression: true,
         options: [
-          { name: 'Chat Completions', value: 'chatCompletions', description: '对话补全' },
-          { name: 'Vision Chat', value: 'visionChat', description: '视觉多模态对话' },
+          { name: 'Chat Completions', value: 'chatCompletions', description: '对话补全', action: '对话补全' },
+          { name: 'Vision Chat', value: 'visionChat', description: '视觉多模态对话', action: '视觉多模态对话' },
         ],
         default: 'chatCompletions',
       },
@@ -159,17 +212,33 @@ export class Kimi implements INodeType {
         },
       },
       {
+        displayName: 'Media Type',
+        name: 'mediaType',
+        type: 'options',
+        options: [
+          { name: 'Image', value: 'image' },
+          { name: 'Video', value: 'video' },
+        ],
+        default: 'image',
+        displayOptions: {
+          show: {
+            operation: ['visionChat'],
+          },
+        },
+      },
+      {
         displayName: 'Image Source',
         name: 'imageSource',
         type: 'options',
         options: [
           { name: 'URL', value: 'url' },
-          { name: 'Binary (from input)', value: 'binary' },
+          { name: 'Binary (From Input)', value: 'binary' },
         ],
         default: 'url',
         displayOptions: {
           show: {
             operation: ['visionChat'],
+            mediaType: ['image'],
           },
         },
       },
@@ -184,6 +253,21 @@ export class Kimi implements INodeType {
           show: {
             operation: ['visionChat'],
             imageSource: ['url'],
+            mediaType: ['image'],
+          },
+        },
+      },
+      {
+        displayName: 'Video URL',
+        name: 'videoUrl',
+        type: 'string',
+        default: '',
+        required: true,
+        placeholder: 'https://... or data:video/mp4;base64,...',
+        displayOptions: {
+          show: {
+            operation: ['visionChat'],
+            mediaType: ['video'],
           },
         },
       },
@@ -198,6 +282,7 @@ export class Kimi implements INodeType {
           show: {
             operation: ['visionChat'],
             imageSource: ['binary'],
+            mediaType: ['image'],
           },
         },
       },
@@ -206,8 +291,8 @@ export class Kimi implements INodeType {
         name: 'encodingMode',
         type: 'options',
         options: [
-          { name: 'Data URL (image_url)', value: 'data_url' },
-          { name: 'Raw Base64 (image_base64)', value: 'image_base64' },
+          { name: 'Data URL (Image_url)', value: 'data_url' },
+          { name: 'Raw Base64 (Image_base64)', value: 'image_base64' },
         ],
         default: 'data_url',
         description: 'How to include binary image in the request payload',
@@ -215,6 +300,7 @@ export class Kimi implements INodeType {
           show: {
             operation: ['visionChat'],
             imageSource: ['binary'],
+            mediaType: ['image'],
           },
         },
       },
@@ -230,6 +316,7 @@ export class Kimi implements INodeType {
             operation: ['visionChat'],
             imageSource: ['binary'],
             encodingMode: ['data_url'],
+            mediaType: ['image'],
           },
         },
       },
@@ -265,18 +352,11 @@ export class Kimi implements INodeType {
             default: 'https://api.moonshot.cn/v1',
           },
           {
-            displayName: 'Temperature',
-            name: 'temperature',
+            displayName: 'Frequency Penalty',
+            name: 'frequency_penalty',
             type: 'number',
-            typeOptions: { minValue: 0, maxValue: 2 },
-            default: 1,
-          },
-          {
-            displayName: 'Top P',
-            name: 'top_p',
-            type: 'number',
-            typeOptions: { minValue: 0, maxValue: 1 },
-            default: 1,
+            typeOptions: { minValue: -2, maxValue: 2 },
+            default: 0,
           },
           {
             displayName: 'Max Tokens',
@@ -292,13 +372,6 @@ export class Kimi implements INodeType {
             default: 0,
           },
           {
-            displayName: 'Frequency Penalty',
-            name: 'frequency_penalty',
-            type: 'number',
-            typeOptions: { minValue: -2, maxValue: 2 },
-            default: 0,
-          },
-          {
             displayName: 'Response Format',
             name: 'response_format',
             type: 'options',
@@ -307,6 +380,19 @@ export class Kimi implements INodeType {
               { name: 'JSON Object', value: 'json_object' },
             ],
             default: 'text',
+          },
+          {
+            displayName: 'Temperature',
+            name: 'temperature',
+            type: 'number',
+            typeOptions: { minValue: 0, maxValue: 2 },
+            default: 1,
+          },
+          {
+            displayName: 'Timeout',
+            name: 'timeout',
+            type: 'number',
+            default: 60000,
           },
           {
             displayName: 'Tool Choice',
@@ -330,14 +416,23 @@ export class Kimi implements INodeType {
               'JSON array of tool definitions (OpenAI/Kimi format), e.g. [{"type":"function","function":{"name":"web_search","parameters":{...}}}]',
           },
           {
-            displayName: 'Timeout',
-            name: 'timeout',
+            displayName: 'Top P',
+            name: 'top_p',
             type: 'number',
-            default: 60000,
+            typeOptions: { minValue: 0, maxValue: 1 },
+            default: 1,
+          },
+          {
+            displayName: 'Use Instant Mode',
+            name: 'use_instant_mode',
+            type: 'boolean',
+            default: false,
+            description: 'Whether to use Instant Mode (disabled thinking). Sets temperature to 0.6.',
           },
         ],
       },
     ],
+    usableAsTool: true,
   };
 
   methods = {
@@ -358,13 +453,13 @@ export class Kimi implements INodeType {
     for (let i = 0; i < items.length; i++) {
       try {
         // Resolve model from resource locator
-        const modelLocator = this.getNodeParameter('model', i) as any;
-        const model = (modelLocator?.value ?? modelLocator) as string;
+        const modelLocator = this.getNodeParameter('model', i) as { value: string } | string;
+        const model = typeof modelLocator === 'object' ? modelLocator.value : modelLocator;
 
-        const options = this.getNodeParameter('options', i, {}) as Record<string, any>;
-        const baseURL = (options.baseURL as string) || 'https://api.moonshot.cn/v1';
+        const options = this.getNodeParameter('options', i, {}) as KimiOptions;
+        const baseURL = options.baseURL || 'https://api.moonshot.cn/v1';
 
-        let messages: any[] = [];
+        let messages: KimiMessage[] = [];
         if (operation === 'chatCompletions') {
           const composeMode = this.getNodeParameter('composeMode', i) as string;
           if (composeMode === 'rawJson') {
@@ -372,9 +467,9 @@ export class Kimi implements INodeType {
             try {
               const parsed = JSON.parse(messagesJson || '[]');
               if (!Array.isArray(parsed)) {
-                throw new Error('messagesJson must be an array');
+                throw new NodeOperationError(this.getNode(), 'messagesJson must be an array', { itemIndex: i });
               }
-              messages = parsed;
+              messages = parsed as KimiMessage[];
             } catch (err) {
               throw new NodeOperationError(this.getNode(), `Invalid messages JSON: ${(err as Error).message}`, { itemIndex: i });
             }
@@ -386,42 +481,56 @@ export class Kimi implements INodeType {
           }
         } else if (operation === 'visionChat') {
           const visionPrompt = this.getNodeParameter('visionPrompt', i) as string;
-          const imageSource = this.getNodeParameter('imageSource', i) as string;
-          const imageDetail = this.getNodeParameter('imageDetail', i) as string;
+          const mediaType = this.getNodeParameter('mediaType', i, 'image') as string;
+          let contentPart: ContentPart;
 
-          let imageContent: Record<string, any> = { type: 'input_image', detail: imageDetail };
+          if (mediaType === 'image') {
+            const imageSource = this.getNodeParameter('imageSource', i) as string;
+            const imageDetail = this.getNodeParameter('imageDetail', i) as string;
+            const imageContent: ImageContent = { type: 'input_image', detail: imageDetail };
 
-          if (imageSource === 'url') {
-            const imageUrl = this.getNodeParameter('imageUrl', i) as string;
-            imageContent.image_url = { url: imageUrl } as any;
-          } else if (imageSource === 'binary') {
-            const binaryProperty = this.getNodeParameter('binaryProperty', i) as string;
-            const encodingMode = this.getNodeParameter('encodingMode', i) as string;
-            const item = items[i] as unknown as { binary?: Record<string, any> };
-            const binaryData = item?.binary?.[binaryProperty];
-            if (!binaryData || typeof binaryData.data !== 'string' || binaryData.data.length === 0) {
-              throw new NodeOperationError(this.getNode(), `Binary property "${binaryProperty}" not found or empty`, { itemIndex: i });
-            }
+            if (imageSource === 'url') {
+              const imageUrl = this.getNodeParameter('imageUrl', i) as string;
+              imageContent.image_url = { url: imageUrl };
+            } else if (imageSource === 'binary') {
+              const binaryProperty = this.getNodeParameter('binaryProperty', i) as string;
+              const encodingMode = this.getNodeParameter('encodingMode', i) as string;
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const item = items[i] as unknown as { binary?: Record<string, any> };
+              const binaryData = item?.binary?.[binaryProperty];
+              if (!binaryData || typeof binaryData.data !== 'string' || binaryData.data.length === 0) {
+                throw new NodeOperationError(this.getNode(), `Binary property "${binaryProperty}" not found or empty`, { itemIndex: i });
+              }
 
-            const base64Data = binaryData.data as string;
-            if (encodingMode === 'image_base64') {
-              imageContent.image_base64 = base64Data;
+              const base64Data = binaryData.data as string;
+              if (encodingMode === 'image_base64') {
+                imageContent.image_base64 = base64Data;
+              } else {
+                const mimeTypeParam = this.getNodeParameter('mimeType', i) as string;
+                const mimeType = binaryData.mimeType || mimeTypeParam || 'image/png';
+                const dataUrl = `data:${mimeType};base64,${base64Data}`;
+                imageContent.image_url = { url: dataUrl };
+              }
             } else {
-              const mimeTypeParam = this.getNodeParameter('mimeType', i) as string;
-              const mimeType = binaryData.mimeType || mimeTypeParam || 'image/png';
-              const dataUrl = `data:${mimeType};base64,${base64Data}`;
-              imageContent.image_url = { url: dataUrl } as any;
+              throw new NodeOperationError(this.getNode(), `Unknown image source: ${imageSource}`, { itemIndex: i });
             }
+            contentPart = imageContent;
+          } else if (mediaType === 'video') {
+            const videoUrl = this.getNodeParameter('videoUrl', i) as string;
+            contentPart = {
+              type: 'video_url',
+              video_url: { url: videoUrl },
+            };
           } else {
-            throw new NodeOperationError(this.getNode(), `Unknown image source: ${imageSource}`, { itemIndex: i });
+            throw new NodeOperationError(this.getNode(), `Unknown media type: ${mediaType}`, { itemIndex: i });
           }
 
           messages = [
             {
               role: 'user',
               content: [
-                { type: 'input_text', text: visionPrompt },
-                imageContent,
+                { type: 'input_text', text: visionPrompt } as TextContent,
+                contentPart,
               ],
             },
           ];
@@ -429,17 +538,37 @@ export class Kimi implements INodeType {
           throw new NodeOperationError(this.getNode(), `Unknown operation: ${operation}`, { itemIndex: i });
         }
 
-        const payload: Record<string, any> = {
+        const payload: KimiPayload = {
           model,
           messages,
         };
 
+
         // K2/K2.5 thinking model detection
-        const isThinkingModel = /k2[\.\d]*.*thinking/i.test(model);
+        const isThinkingModel = /k2[.\d]*.*thinking/i.test(model) || /k2\.5/i.test(model);
+        const useInstantMode = options.use_instant_mode as boolean;
 
         // Options mapping
-        if (typeof options.temperature === 'number') payload.temperature = options.temperature;
-        if (typeof options.top_p === 'number') payload.top_p = options.top_p;
+        if (typeof options.temperature === 'number') {
+          payload.temperature = options.temperature;
+        } else if (isThinkingModel) {
+          // Default temperature: 0.6 for Instant, 1.0 for Thinking
+          payload.temperature = useInstantMode ? 0.6 : 1.0;
+        }
+
+        if (typeof options.top_p === 'number') {
+          payload.top_p = options.top_p;
+        } else if (isThinkingModel) {
+          // Default top_p: 0.95 for K2.5/Thinking models
+          payload.top_p = 0.95;
+        }
+
+        // Apply Instant Mode configuration
+        if (useInstantMode && isThinkingModel) {
+          // Corrected payload for official API
+          payload.thinking = { type: 'disabled' };
+        }
+
         if (typeof options.max_tokens === 'number' && options.max_tokens > 0) payload.max_tokens = options.max_tokens;
         if (typeof options.presence_penalty === 'number') payload.presence_penalty = options.presence_penalty;
         if (typeof options.frequency_penalty === 'number') payload.frequency_penalty = options.frequency_penalty;
@@ -455,9 +584,9 @@ export class Kimi implements INodeType {
           try {
             const tools = JSON.parse(options.tools_json);
             if (!Array.isArray(tools)) {
-              throw new Error('tools_json must be an array');
+              throw new NodeOperationError(this.getNode(), 'tools_json must be an array', { itemIndex: i });
             }
-            payload.tools = tools;
+            payload.tools = tools as Record<string, unknown>[];
           } catch (err) {
             throw new NodeOperationError(
               this.getNode(),
@@ -506,14 +635,20 @@ export class Kimi implements INodeType {
 
         returnData.push(...executionData);
       } catch (error) {
+        const err = error as { message?: string; statusCode?: number; error?: { message?: string; type?: string } };
         if (this.continueOnFail()) {
-          const err: any = error as any;
-          returnData.push({ json: { error: (err?.message ?? String(error)), statusCode: err?.statusCode, type: err?.error?.type }, pairedItem: { item: i } });
+          returnData.push({
+            json: {
+              error: err.message ?? String(error),
+              statusCode: err.statusCode,
+              type: err.error?.type,
+            },
+            pairedItem: { item: i },
+          });
           continue;
         }
-        const err: any = error as any;
-        const msg = err?.error?.message || err?.message || 'Request failed';
-        throw new NodeOperationError(this.getNode(), `${msg}`, { itemIndex: i });
+        const msg = err.error?.message || err.message || 'Request failed';
+        throw new NodeOperationError(this.getNode(), msg, { itemIndex: i });
       }
     }
 
